@@ -10,7 +10,7 @@ title: ICYMORN | 寒霜之晨
 email: im.moevis@gmail.com
 description: 诗与编程
 baseurl: "" 
-url: "http://moevis.github.io" # the base hostname & protocol for your site
+url: "https://moevis.github.io" # the base hostname & protocol for your site
 twitter_username: moevery
 github_username: moevis
 paginate: 5
