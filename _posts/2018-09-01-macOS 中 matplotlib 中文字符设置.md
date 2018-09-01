@@ -3,6 +3,7 @@ published: true
 layout: post
 catagories: cheatsheet
 publish: true
+author: Moevis
 ---
 做毕设的时候用 matplotlib 画图表，当时有一个想法是给坐标轴加上中文，但是发现要设置一些东西，当时时间比较赶，就算了。今天正好想写一点 matplotlib 教程，所以就重新研究一下。
 
