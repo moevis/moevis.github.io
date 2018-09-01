@@ -1,7 +1,7 @@
 ---
 layout: post
 categories: cheatsheet
-published: true 
+published: true
 ---
 开始写 python 了，jupyter notebook 虽然方便，但是没有语法检查，有时候脑残起来没下限，各种错。而用 spyder 又经常用出 bug 来，很气。
 
@@ -43,6 +43,14 @@ published: true
 - `SPC c l` 注释行
 - `SPC c p` 注释一段
 
+## 宏
+
+spacemacs 有和 vim 一样的宏。
+
+- `qa` 开始记录一个叫 a 的宏
+- `q` 停止记录
+- `@a` 运行宏，接下来如果要重复运行的话，可以用 `.` 来运行上一个命令
+
 ## emacs
 
 emacs 标准键
@@ -73,8 +81,13 @@ emacs 标准键
 - `ctrl-r` 重做
 - `mx` 设定一个叫 x 的记号
 - `'x` 或者 `\`x` 回到 x 记号位置或者回到 x 记号所在行
+- `:marks` 列出所有记号
 - `guu` 整行变小写
 - `gUU` 整行变大写
+- `''` 跳到前一个位置
+- `>aB` 缩进一个块
+- `ds>` 删除两端的 `<>`
+
 
 ## 国内源
 
