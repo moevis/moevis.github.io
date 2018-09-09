@@ -169,5 +169,7 @@ root:
 
 不过 yaml 由于不是 python 默认自带的库，需要你自己手动装一下。
 
+还有在使用 logging 的时候有个小技巧，通过调用 `logger.exception(msg)` 时还会把当前抛出的错误的调用栈打印出来，当然也可以用 `logger.error(msg, exc_info=True)` 来打印。
+
 
 参考：[https://logmatic.io/blog/python-logging-with-json-steroids/](https://logmatic.io/blog/python-logging-with-json-steroids/)
