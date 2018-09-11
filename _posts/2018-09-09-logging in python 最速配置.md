@@ -42,8 +42,7 @@ def setup_logging(
     "disable_existing_loggers": false,
     "formatters": {
         "simple": {
-            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            "format": "%(asctime)s, %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
+            "format": "%(asctime)s, %(levelname)-6s [%(filename)s:%(lineno)d] %(message)s"
         }
     },
 
@@ -131,8 +130,7 @@ version: 1
 disable_existing_loggers: False
 formatters:
     simple:
-        format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        format: "%(asctime)s, %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
+        format: "%(asctime)s, %(levelname)-6s [%(filename)s:%(lineno)d] %(message)s"
 
 handlers:
     console:
