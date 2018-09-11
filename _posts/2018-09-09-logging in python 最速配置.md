@@ -11,6 +11,7 @@ logging 本身是 python 内置的一个库，用起来也很方便。现在备�
 ```python
 import json
 import logging.config
+import os
 
 def setup_logging(
     default_path='logging.json',
@@ -42,6 +43,7 @@ def setup_logging(
     "formatters": {
         "simple": {
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "format": "%(asctime)s, %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
         }
     },
 
@@ -130,6 +132,7 @@ disable_existing_loggers: False
 formatters:
     simple:
         format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        format: "%(asctime)s, %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
 
 handlers:
     console:
