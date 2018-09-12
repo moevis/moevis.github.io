@@ -1,5 +1,5 @@
 ---
-published: false
+published: true
 layout: post
 author: Moevis
 categories: cheatsheet
