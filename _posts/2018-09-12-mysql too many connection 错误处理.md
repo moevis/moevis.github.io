@@ -60,3 +60,9 @@ select concat('kill ', ID, ';')select * from PROCESSLIST from PROCESSLIST where 
 ```
 
 接着把输出的内容再粘贴回去运行即可。
+
+还有一个步骤，就是把 process 上限提高：
+
+```sql
+set global max_connections = XXXX;
+```
