@@ -1,0 +1,95 @@
+---
+layout: "post"
+title: "模型代码化的一些思考"
+date: "2018-09-24 00:02"
+published: true
+author: Moevis
+categories: cheatsheet
+---
+
+将二进制文件硬编码进代码可以一定程度上防止模型文件泄露，不过如何嵌入是一个需要考虑的点。
+
+我在 github 上看到有这样做：
+
+```c++
+
+std::string string_to_hex(const std::string &in)
+{
+  std::stringstream ss;
+
+  ss << std::hex << std::setfill('0');
+  for (size_t i = 0; in.length() > i; ++i)
+  {
+    ss << std::setw(2) << static_cast<unsigned int>(static_cast<unsigned char>(in[i]));
+  }
+
+  return ss.str();
+}
+
+std::string hex_to_string(const std::string &in)
+{
+  std::string output;
+
+  if ((in.length() % 2) != 0)
+  {
+    throw std::runtime_error("string is not valid length!");
+  }
+
+  size_t cnt = in.length() / 2;
+
+  for (size_t i = 0; cnt > i; ++i)
+  {
+    uint32_t s = 0;
+    std::stringstream ss;
+    ss << std::hex << in.substr(i * 2, 2);
+    ss >> s;
+
+    output.push_back(static_cast<unsigned char>(s));
+  }
+
+  return output;
+}
+```
+
+这里用了 stringstream 将二进制文件转为 16 进制的 plain text 进行输出，这样放到代码里就不会有奇怪的字符和乱码。但是这段代码效率极低，我后面查问题发现 stringstream 本身就很慢！后来我在另外的一个代码库中看到另一种实现：
+
+
+```c++
+
+typedef std::vector<uint8_t> Bytes;
+
+uint8_t char_to_uint[256];
+const char uint_to_char[10 + 26 + 1] = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+Bytes str_to_bytes(const char *src){
+    return Bytes(src, src + strlen(src));
+}
+
+Bytes hex_to_raw(const Bytes &src){
+    size_t n = src.size();
+    assert(n % 2 == 0);
+    Bytes dst(n/2);
+    for (size_t i = 0; i < n/2; i++){
+        uint8_t hi = char_to_uint[src[i*2 + 0]];
+        uint8_t lo = char_to_uint[src[i*2 + 1]];
+        dst[i] = (hi << 4) | lo;
+    }
+    return dst;
+}
+
+Bytes raw_to_hex(const Bytes &src){
+    size_t n = src.size();
+    Bytes dst(n*2);
+    for (size_t i = 0; i < n; i++){
+        uint8_t hi = (src[i] >> 4) & 0xf;
+        uint8_t lo = (src[i] >> 0) & 0xf;
+        dst[i*2 + 0] = uint_to_char[hi];
+        dst[i*2 + 1] = uint_to_char[lo];
+    }
+    return dst;
+}
+```
+
+上面的代码在 `O3` 优化后，速度很快。不过在解决了速度问题后，发现代码大小大大增加，比如我要把一个 100MB 的文件硬编码进代码中，代码文件就会变成 200MB。其实仔细分析一下就可以看出来，这里 raw to hex 实际上是用一个字符 char (2^8) 来表示一个 16 进制的数(2^4)，比如 0x1111 用一个字符 F 来表示。这里很容易看出来最终的代码文件大小会恰好是原二进制文件的两倍，非常费资源。
+
+所以最好的方法还是用 base64 来编码和解码，由于 base64 的特性，编码后的字符串是原来的 133% 倍大小，处于可接受的范畴。不过 base64 涉及到另一个问题——base64 速度并不快，不过就不在这里讲了。
