@@ -1,0 +1,52 @@
+---
+published: true
+layout: post
+categories: cheatsheet
+---
+
+在尝试配置 kibana 时候，发现 kibana 没有内置的登陆验证系统，放在公网很不安全。于是我找了 nginx 配置 basic auth 的一点教程。
+
+首先我们看看用 nginx 配置一个最简单的透明代理的配置文件：
+
+```
+server {
+    listen 8080;
+    location / {
+        proxy_pass http://localhost:5601;
+    }
+}
+```
+
+在 `/etc/nginx/sites-enabled` 中创建一个配置文件后，运行命令：
+
+```
+sudo nginx -s reload
+```
+
+即可刷新 nginx 的配置信息，nginx 在刷新后即可把 8080 端口的通信转发到 5601 端口上。我们继续为这个转发加上 basic auth，这时候我们需要一个记录账号的文件，文件格式是这样的：
+
+```
+user1:pass1
+user2:pass2
+```
+
+其中 user 是用户名， pass 是经过加密后的密码，这个密码我们可以用多种方式产生，最方便的是用 openssl 工具：
+
+```
+printf "user:$(openssl passwd -crypt nimda)" > passwords
+```
+
+接着对 nginx 的配置文件进行略微修改如下：
+
+```
+server {
+    listen 8080;
+    auth_basic "Protected kibana";
+    auth_basic_user_file /etc/nginx/passwords;
+    location / {
+        proxy_pass http://localhost:5601;
+    }
+}
+```
+
+注意这里的 `/etc/nginx/passwords` 就是我们产生的密码文件，一定要是绝对路径的，否则 nginx 会找不到。然后用 safari 访问 host:8080，浏览器就会弹框提示你要输入用户名和密码啦。这里我强调是 safari 是因为我 chrome 似乎还有缓存，我的域名 moevis.cc 对于 http 连接做了转发到 https 的操作，而我配置好 basic auth 后，chrome 依然把我的请求转发到 https://moevis.cc:8080 上，但实际上开一个隐身模式的窗口就可以了。
