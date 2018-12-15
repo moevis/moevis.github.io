@@ -1,0 +1,225 @@
+---
+published: true
+layout: post
+categories: cheatsheet
+---
+
+> 看了 http://madebyevan.com/obscure-cpp-features/ 后，有学到一些 C++ 有趣的特性，现在总结一下
+
+## 内置的一些运算符也可以用关键字替代
+
+像 `and, and_eq, bitand, bitor, compl, not, not_eq, or, or_eq, xor, xor_eq, <%, %>, <:, 和 :> `可以替代运算符 `&&, &=, &, |, ~, !, !=, ||, |=, ^, ^=, {, }, [, 和 ]`。
+
+## 重定义关键字
+
+C++ 宏本质是字符串替换，所以能做一些很 trick 的事情，比如如果你想临时绕过 private 和 protect 保护的变量，来测试一些功能，可以这么做：
+
+```c++
+#define class struct
+#define private public
+#define protected public
+
+#include "library.h"
+
+#undef class
+#undef private
+#undef protected
+```
+
+这样 `library.h` 中所有的成员函数或变量都是 public 类型，可以随意访问了。当然千万不要写 `#define true false` 这种代码，可能会被打。
+
+## placement new
+C++ 中的 new 和 C 语言中的 malloc 作用相近，都是开辟一片新内存空间，不过 new 还会调用对象构造函数。实际上可以使用 placement new 语法，在指定的内存位置上调用构造函数：
+
+```c++
+#include <iostream>
+using namespace std;
+
+struct Test {
+  int data;
+  Test() { cout << "Test::Test()" << endl; }
+  ~Test() { cout << "Test::~Test()" << endl; }
+};
+
+int main() {
+  // Must allocate our own memory
+  Test *ptr = (Test *)malloc(sizeof(Test));
+
+  // Use placement new
+  new (ptr) Test;
+
+  // Must call the destructor ourselves
+  ptr->~Test();
+
+  // Must release the memory ourselves
+  free(ptr);
+
+  return 0;
+}
+```
+
+这种方法主要用在一些对性能要求严格的地方，这种场景一般会自行管理内存的申请和释放。
+
+## 声明语句也有返回值
+
+你可以利用声明语句的返回值，简化 if 条件语句的代码，当然这种方法在很多语言中都有，听说 python 也想要加上这个语法。这里更感兴趣的是 dynamic_cast 的返回值，原来 dynamic_cast 在 cast 失败时会返回 NULL 作为结果。
+
+```c++
+struct Event { virtual ~Event() {} };
+struct MouseEvent : Event { int x, y; };
+struct KeyboardEvent : Event { int key; };
+
+void log(Event *event) {
+  if (MouseEvent *mouse = dynamic_cast<MouseEvent *>(event))
+    std::cout << "MouseEvent " << mouse->x << " " << mouse->y << std::endl;
+
+  else if (KeyboardEvent *keyboard = dynamic_cast<KeyboardEvent *>(event))
+    std::cout << "KeyboardEvent " << keyboard->key << std::endl;
+
+  else
+    std::cout << "Event" << std::endl;
+}
+```
+
+## 成员函数左值与右值的重载
+
+之前在看左值和右值时，大多数都是讲传参时做区分，其实在调用函数时，也可以写一个为右值优化的版本。
+
+```c++
+#include <iostream>
+
+struct Foo {
+  void foo() & { std::cout << "lvalue" << std::endl; }
+  void foo() && { std::cout << "rvalue" << std::endl; }
+};
+
+int main() {
+  Foo foo;
+  foo.foo(); // Prints "lvalue"
+  Foo().foo(); // Prints "rvalue"
+  return 0;
+}
+```
+
+## 成员指针
+
+可以定义一个指针，指向对应类的成员，下面的例子中定义了两个指针，一个是 ptr_num，一个是 ptr_func，注意调用它们时用的是`(t.*ptr_func)();` 和 `(pt->*ptr_func)();` 这样的语句。
+
+```c++
+#include <iostream>
+using namespace std;
+
+struct Test {
+  int num;
+  void func() {}
+};
+
+// Notice the extra "Test::" in the pointer type
+int Test::*ptr_num = &Test::num;
+void (Test::*ptr_func)() = &Test::func;
+
+int main() {
+  Test t;
+  Test *pt = new Test;
+
+  // Call the stored member function
+  (t.*ptr_func)();
+  (pt->*ptr_func)();
+
+  // Set the variable in the stored member slot
+  t.*ptr_num = 1;
+  pt->*ptr_num = 2;
+
+  delete pt;
+  return 0;
+}
+```
+
+这种方法在 boost.python 库中被大量使用：
+
+```c++
+#include <iostream>
+#include <boost/python.hpp>
+using namespace boost::python;
+
+struct World {
+  std::string msg;
+  void greet() { std::cout << msg << std::endl; }
+};
+
+BOOST_PYTHON_MODULE(hello) {
+  class_<World>("World")
+    .def_readwrite("msg", &World::msg)
+    .def("greet", &World::greet);
+}
+```
+
+## 可以在类的实例上调用到静态方法
+
+直接看例子：
+
+```c++
+struct Foo {
+  static void foo() {}
+};
+
+// These are equivalent
+Foo::foo();
+Foo().foo();
+```
+
+## 操作符重载
+
+重载 `,`, `||`, `&&` 会让你的代码变得难以理解，因为这些操作符是有运算顺序的，比如 `,` 左边的语句一定会先于右边执行，而 `||` 和 `&&` 则有短路规则，有可能右边的语句并不会执行。但是如果你重载了他们，这些操作都变成了函数调用，而函数参数的计算顺序是未定义的，所以有可能会有隐藏的隐患。
+
+在这里展示一个疯狂的点子，用 C++ 实现 python2 的 print 语句（千万别在实际中使用）：
+
+```c++
+#include <iostream>
+
+namespace __hidden__ {
+  struct print {
+    bool space;
+    print() : space(false) {}
+    ~print() { std::cout << std::endl; }
+
+    template <typename T>
+    print &operator , (const T &t) {
+      if (space) std::cout << ' ';
+      else space = true;
+      std::cout << t;
+      return *this;
+    }
+  };
+}
+
+#define print __hidden__::print(),
+
+int main() {
+  int a = 1, b = 2;
+  print "this is a test";
+  print "the sum of", a, "and", b, "is", a + b;
+  return 0;
+}
+```
+
+## 函数也可以作为模板参数
+
+你不仅可以在模板函数中使用不同的变量类型，也可以使用函数作为模板参数，比如下面的带缓存的模板函数调用：
+
+```c++
+#include <map>
+
+template <int (*f)(int)>
+int memoize(int x) {
+  static std::map<int, int> cache;
+  std::map<int, int>::iterator y = cache.find(x);
+  if (y != cache.end()) return y->second;
+  return cache[x] = f(x);
+}
+
+int fib(int n) {
+  if (n < 2) return n;
+  return memoize<fib>(n - 1) + memoize<fib>(n - 2);
+}
+```
