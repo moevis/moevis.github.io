@@ -26,16 +26,59 @@ Serverless 中的业务逻辑应该是无状态的，函数运行由事件驱动
 
 ```c
 #include <stdio.h>
-// TODO 写一个调用子进程的 C 程序，接受命令行参数
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int main(int argc, char *argv[]) {
+    pid_t pid;
+
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <command> [arguments...]\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    pid = fork(); // 创建一个子进程
+
+    if (pid == -1) {
+        // fork失败
+        perror("fork failed");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        // 在子进程中
+        execvp(argv[1], &argv[1]); // 执行命令行参数指定的程序
+
+        // 如果execvp返回，那说明出错了
+        perror("execvp failed");
+        exit(EXIT_FAILURE);
+    } else {
+        // 在父进程中
+        int status;
+        waitpid(pid, &status, 0); // 等待子进程结束
+        if (WIFEXITED(status)) {
+            printf("Child exited with code %d\n", WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            printf("Child terminated by signal %d\n", WTERMSIG(status));
+        }
+    }
+
+    return 0;
+}
 ```
 
-```bash
+```shell
 gcc -o simple_run main.c
 ```
 
-在这个 simple_run 里面，接受命令行参数指定第三方程序的运行命令，通过管道读取用户程序的输出。
+运行子程序也很简单
 
-这里对第三方程序的限制非常少，用户代码可以是脚本程序，也可以是编译后的程序。
+```
+./simple_run ls -l
+```
+
+在这个 simple_run 里面，接受命令行参数指定第三方程序的运行命令，并通过父子进程方式进行运行时隔离。
+
+这个方式极为简单直接，但是也是最为危险的，因为这里对第三方程序的限制非常少，需要进一步优化。
 
 ### 脚本执行模块
 
@@ -170,14 +213,26 @@ int main() {
 
 ### 优化加载方案
 
-镜像的目录大概率是不可更改的，可以打包成紧凑的只读镜像（erofs），很多文件调用在只读镜像上可以直接返回。
+镜像的目录大概率是不可更改的，可以打包成紧凑的只读镜像（erofs），很多文件调用在只读镜像上可以直接返回，相比可写的文件系统，erofs 对于随机读写，占用空间都有极大优化。
 
-```bash
-mkfs.erofs
-mount
+比如下面的命令创建了一个最简的只读 busybox 系统并挂载为 `/mnt/busybox_erofs`
+
+```shell
+# 创建一个只读镜像
+dd if=/dev/zero of=busybox_erofs_image.img bs=1M count=100
+# 将 busybox 系统写入镜像
+dd if=busybox_fs.img of=busybox_erofs_image.img conv=notrunc
+# 将镜像转换为 EROFS 格式
+mkfs.erofs -i busybox_fs.img -o busybox_erofs.img
+
+# 创建一个挂载点
+mkdir /mnt/busybox_erofs
+
+# 挂载镜像
+sudo mount -t erofs -o loop busybox_erofs.img /mnt/busybox_erofs
 ```
 
-阿里巴巴提供的 nybus 镜像服务，会对容器镜像进行 chunk 化，以 10MB 作为一个单位分割，容器可以在镜像还未 ready 时即可启动，当业务代码需要容器中的某个文件时，会去下载对应的 chunk。chunk 可以跨不同的镜像进行复用，而不是以往的 layer 复用，这样的方案对于大镜像有很好的加速作用。
+另外，还有一种优化 serverless 服务加载时间的做法是动态加载，比如阿里巴巴提供的 nybus 镜像服务，会对容器镜像进行 chunk 化，以 10MB 作为一个单位分割，容器可以在镜像还未 ready 时即可启动，当业务代码需要容器中的某个文件时，会去下载对应的 chunk。chunk 可以跨不同的镜像进行复用，而不是以往的 layer 复用，这样的方案对于大镜像有很好的加速作用。
 
 ## 运行时隔离
 
@@ -728,3 +783,4 @@ docker 作为容器的一个很经典实现，使用 namespace/cgroups 进行隔
 由于该技术比较成熟且重型，我不再进行详细阐述。
 
 另外容器不一定只使用 namespace/cgroups，还有很多使用虚拟机技术进行隔离的，比如 AWS 的 firecracker 直接通过 KVM 技术创建和管理虚拟机运行容器进程。
+
